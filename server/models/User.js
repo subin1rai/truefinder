@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema(
     city: { type: String, required: true },
     agreeToTerms: { type: Boolean, required: true },
     isVerified: { type: Boolean, default: false },
+    avatar: {
+      type:String,
+      default:"https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net/557058:fe1e10e7-d931-49b4-816a-cc8517da2177/" 
+    },
     preferences: [{ type: String }], // Keep this for backward compatibility
     
     // New profile fields
@@ -66,3 +70,4 @@ const userSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("User", userSchema);
+
