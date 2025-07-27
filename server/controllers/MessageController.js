@@ -57,11 +57,14 @@ export const createMessage = async (req, res) => {
   }
 };
 
-
-export const getMessages= async(req,res)=>{
+export const getMessages = async (req, res) => {
   try {
-    const {senderId, receiverId} = req.body;
-  } catch (error) {
-    
-  }
-}
+    const { senderId, receiverId } = req.body;
+    if ((!senderId, !receiverId)) {
+      return res.status(400).json({
+        success: false,
+        message: `${!senderId ? "SenderId " : "receiverId "}is required`,
+      });
+    }
+  } catch (error) {}
+};
