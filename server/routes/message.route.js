@@ -4,5 +4,5 @@ const router = express.Router();
 
 
 router.post("/createMessage",createMessage);
-router.post("getMessages",getMessages);
+router.post("/getMessages",getMessages);
 module.exports = router;

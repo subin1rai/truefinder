@@ -66,5 +66,37 @@ export const getMessages = async (req, res) => {
         message: `${!senderId ? "SenderId " : "receiverId "}is required`,
       });
     }
-  } catch (error) {}
+    const conversation = await Conversation.findOne({
+      members:{
+        $all:[senderId, receiverId],
+        $size: 2
+      }
+    }).populate("messages");
+    if(!conversation){
+    const newConversation = new Conversation({
+        members: [senderId, receiverId],
+        messages: [],
+      });
+      await newConversation.save();
+        return res.status(200).json({
+        success: true,
+        message:"Conversation created",
+        data:conversation
+      })
+    }
+      return res.status(200).json({
+        success: true,
+        message:"Conversation Found",
+        data:conversation.messages
+      })
+    
+
+
+  } catch (error) {
+     console.log(error);
+    return res.status(500).json({
+      sucess: false,
+      message: "Internal Server Error",
+    });
+  }
 };
