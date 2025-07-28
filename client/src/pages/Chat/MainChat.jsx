@@ -19,11 +19,12 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Header from "../../components/Header";
-import { axiosInstance } from "../../api/baseUrl";
+import { axiosInstance, BaseUrl } from "../../api/baseUrl";
 import { toast } from "react-toastify";
 import { setSelectedUser } from "../../redux/slice/SelectUser";
+import { io } from "socket.io-client";
 
 export default function MainChat() {
   const navigate = useNavigate();
@@ -32,10 +33,52 @@ export default function MainChat() {
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { selectedUser } = useSelector((state) => state.selectedUser);
   const [chats, setChats] = useState([]);
+  const [socket, setSocket] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Initialize socket connection
+  useEffect(() => {
+    let newSocket;
+    
+    if (user && user._id) {
+      newSocket = io(BaseUrl, {
+        transports: ['websocket'],
+        upgrade: true
+      });
+      
+      setSocket(newSocket);
+
+      newSocket.on('connect', () => {
+        console.log('Connected to server:', newSocket.id);
+        newSocket.emit("AddUserSocket", user._id);
+      });
+
+      newSocket.on('disconnect', () => {
+        console.log('Disconnected from server');
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+      });
+    }
+
+    return () => {
+      if (newSocket) {
+        newSocket.close();
+      }
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -52,6 +95,56 @@ export default function MainChat() {
     }
   }, [selectedChat, user?._id]);
 
+  // Handle incoming socket messages
+  useEffect(() => {
+    if (socket) {
+      const handleReceiveMessage = (newMessage) => {
+        console.log("Received socket message:", newMessage);
+        
+        // Check if the message is for the currently selected chat
+        if (newMessage.userId === selectedUser?.chatId || newMessage.receiverId === user?._id) {
+          setMessages((prevMessages) => {
+            // Avoid duplicate messages
+            const messageExists = prevMessages.some(msg => 
+              msg.userId === newMessage.userId && 
+              msg.message === newMessage.message && 
+              Math.abs((msg.time || msg.createdAt) - newMessage.time) < 1000
+            );
+            
+            if (!messageExists) {
+              return [...prevMessages, {
+                userId: newMessage.userId,
+                message: newMessage.message,
+                time: newMessage.time,
+                createdAt: new Date(newMessage.time).toISOString()
+              }];
+            }
+            return prevMessages;
+          });
+        }
+      };
+
+      const handleMessageSent = (data) => {
+        console.log("Message sent confirmation:", data);
+      };
+
+      const handleMessageError = (error) => {
+        console.error("Socket message error:", error);
+        toast.error("Failed to send message");
+      };
+
+      socket.on("receiveMessage", handleReceiveMessage);
+      socket.on("messageSent", handleMessageSent);
+      socket.on("messageError", handleMessageError);
+
+      return () => {
+        socket.off("receiveMessage", handleReceiveMessage);
+        socket.off("messageSent", handleMessageSent);
+        socket.off("messageError", handleMessageError);
+      };
+    }
+  }, [socket, selectedUser, user]);
+
   const getUser = async () => {
     try {
       const response = await axiosInstance.post("/getUser", {
@@ -65,7 +158,12 @@ export default function MainChat() {
       // Auto-select first chat if none selected and chats exist
       if (validChats.length > 0 && !selectedChat) {
         const firstChat = validChats[0];
-        handleSelect(firstChat._id, firstChat.firstName, firstChat.lastName, firstChat.avatar);
+        handleSelect(
+          firstChat._id,
+          firstChat.firstName,
+          firstChat.lastName,
+          firstChat.avatar
+        );
       }
 
       console.log("Valid chats:", validChats);
@@ -77,7 +175,7 @@ export default function MainChat() {
 
   const GetMessage = async () => {
     if (!selectedChat || !user?._id) return;
-    
+
     try {
       setLoading(true);
       const response = await axiosInstance.post("/message/getMessages", {
@@ -97,34 +195,71 @@ export default function MainChat() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedChat || !user?._id) return;
+    if (!newMessage.trim() || !selectedChat || !user?._id || !socket) return;
 
     const messageText = newMessage.trim();
     setNewMessage(""); // Clear input immediately for better UX
 
+    // Create optimistic message update
+    const optimisticMessage = {
+      userId: user._id,
+      message: messageText,
+      time: Date.now(),
+      createdAt: new Date().toISOString(),
+      _id: `temp-${Date.now()}` // temporary ID
+    };
+
+    // Add message optimistically
+    setMessages((prevMessages) =>
+      Array.isArray(prevMessages)
+        ? [...prevMessages, optimisticMessage]
+        : [optimisticMessage]
+    );
+
+    // Send via socket
+    if (socket.connected) {
+      socket.emit("sendMessages", {
+        senderId: user._id,
+        receiverId: selectedChat,
+        message: messageText,
+      });
+    } else {
+      console.error("Socket not connected");
+      toast.error("Connection lost. Please refresh the page.");
+      return;
+    }
+
     try {
+      // Save to database
       const { data } = await axiosInstance.post("/message/createMessage", {
         senderId: user._id,
         receiverId: selectedChat,
         message: messageText,
       });
-      
-      console.log("Message sent:", data);
-      
-      // Add the new message to the messages array immediately
-      const newMessageObj = {
-        _id: data._id || Date.now().toString(),
-        senderId: user._id,
-        receiverId: selectedChat,
-        message: messageText,
-        createdAt: new Date().toISOString(),
-      };
-      
-      setMessages(prevMessages => [...prevMessages, newMessageObj]);
-      
+
+      console.log("Message saved to DB:", data);
+
+      // Update the optimistic message with real data
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg._id === optimisticMessage._id
+            ? {
+                ...msg,
+                _id: data._id || msg._id,
+                createdAt: data.createdAt || msg.createdAt
+              }
+            : msg
+        )
+      );
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.message || error.message);
+      
+      // Remove optimistic message on error
+      setMessages((prevMessages) =>
+        prevMessages.filter((msg) => msg._id !== optimisticMessage._id)
+      );
+      
       setNewMessage(messageText); // Restore message on error
     }
   };
@@ -139,7 +274,7 @@ export default function MainChat() {
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return "";
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   const selectedChatData = chats.find((chat) => chat._id === selectedChat);
@@ -148,7 +283,7 @@ export default function MainChat() {
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Fixed Header */}
       <div className="flex-shrink-0">
-        <Header />
+        <Header/>
       </div>
 
       {/* Main Content Area */}
@@ -315,12 +450,14 @@ export default function MainChat() {
                       <div className="p-4 space-y-4">
                         {loading ? (
                           <div className="flex justify-center items-center py-8">
-                            <div className="text-gray-500">Loading messages...</div>
+                            <div className="text-gray-500">
+                              Loading messages...
+                            </div>
                           </div>
                         ) : messages.length > 0 ? (
-                          messages.map((message) => (
+                          messages.map((message, index) => (
                             <div
-                              key={message._id}
+                              key={message._id || index}
                               className={`flex ${
                                 message.userId === user._id
                                   ? "justify-end"
@@ -342,16 +479,20 @@ export default function MainChat() {
                                       : "text-gray-500 text-start"
                                   }`}
                                 >
-                                  {formatMessageTime(message.createdAt)}
+                                  {formatMessageTime(message.createdAt || message.time)}
                                 </p>
                               </div>
                             </div>
                           ))
                         ) : (
                           <div className="flex justify-center items-center py-8">
-                            <div className="text-gray-500">No messages yet. Start the conversation!</div>
+                            <div className="text-gray-500">
+                              No messages yet. Start the conversation!
+                            </div>
                           </div>
                         )}
+                        {/* Invisible element to scroll to */}
+                        <div ref={messagesEndRef} />
                       </div>
                     </ScrollArea>
                   </div>
