@@ -1,34 +1,14 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const Message = require('../models/Message');
+const auth = require("../middleware/authMiddleware");
+const { history, message, deletehistory } = require("../controllers/chatbotController");
 
-// POST: Send a message
-router.post('/send', async (req, res) => {
-  try {
-    const { sender, receiver, text } = req.body;
-    const message = new Message({ sender, receiver, text });
-    await message.save();
-    res.status(201).json(message);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Get chat history for a user
+router.get("/history", auth, history);
 
-// GET: Get messages between two users
-router.get('/:user1/:user2', async (req, res) => {
-  try {
-    const { user1, user2 } = req.params;
-    const messages = await Message.find({
-      $or: [
-        { sender: user1, receiver: user2 },
-        { sender: user2, receiver: user1 }
-      ]
-    }).sort({ timestamp: 1 });
+// Send message to AI chatbot
+router.post("/message", message);
 
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
+// Clear chat history for a user
+router.delete("/history", auth, deletehistory);
 module.exports = router;

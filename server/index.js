@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.route");
+const chatRoutes = require("./routes/chat.route");
 const messageRoutes = require("./routes/message.route");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
@@ -23,6 +24,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api", userRoutes);
+app.use("/api/chat", chatRoutes)
 app.use("/api/message", messageRoutes);
 
 app.get("/", (req, res) => {

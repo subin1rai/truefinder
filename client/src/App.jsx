@@ -11,6 +11,7 @@ import MainChat from "./pages/Chat/MainChat";
 import {Provider } from "react-redux";
 import store, { persistor } from "./redux/store/store";
 import { PersistGate } from "redux-persist/integration/react";
+import Chatbot from "./components/ChatBot";
 function App() {
 
   return (
@@ -38,6 +39,7 @@ function App() {
         pauseOnHover
         theme="light" // or "dark"
         />
+        <Chatbot/>
         </PersistGate>
         </Provider>
     </>
