@@ -1,20 +1,51 @@
-const User = require('../models/user.js');
+const Conversation = require("../models/Conversation.js");
+const User = require("../models/user.js");
 
 // GET all users
+
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find();
-    res.json(users);
+    const { currentUserId } = req.body;    
+    // Find all conversations where the current user is a member
+    const conversations = await Conversation.find({
+      members: currentUserId
+    }).populate({
+      path: 'members',
+      select: 'firstName lastName email avatar isVerified online lastSeen createdAt'
+    });
+    
+    if (conversations.length === 0) {
+      return res.status(404).json({ message: "No conversations found" });
+    }
+
+    // Extract all users from conversations and exclude current user
+    const allUsers = [];
+    conversations.forEach(conversation => {
+      conversation.members.forEach(member => {
+        // Only add if it's not the current user and not already in the array
+        if (member._id.toString() !== currentUserId && 
+            !allUsers.find(user => user._id.toString() === member._id.toString())) {
+          allUsers.push(member);
+        }
+      });
+    });
+
+    if (allUsers.length === 0) {
+      return res.status(404).json({ message: "No other users found in conversations" });
+    }
+
+    res.json(allUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
 exports.getUser = async (req, res) => {
   try {
-    const id = req.params.id; 
+    const id = req.params.id;
     console.log(id);
 
-    const user = await User.findById(id); 
+    const user = await User.findById(id);
     console.log(user);
 
     if (!user) {
@@ -27,7 +58,6 @@ exports.getUser = async (req, res) => {
   }
 };
 
-
 // POST a new user
 exports.createUser = async (req, res) => {
   try {
@@ -38,7 +68,6 @@ exports.createUser = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
-
 
 exports.updateProfile = async (req, res) => {
   try {
@@ -57,20 +86,21 @@ exports.updateProfile = async (req, res) => {
     }
 
     // Remove sensitive fields that shouldn't be updated through this endpoint
-    const { password, email, agreeToTerms, isVerified, ...safeUpdateData } = updateData;
+    const { password, email, agreeToTerms, isVerified, ...safeUpdateData } =
+      updateData;
 
     // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { 
+      {
         ...safeUpdateData,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
-      { 
+      {
         new: true, // Return updated document
-        runValidators: true // Run schema validations
+        runValidators: true, // Run schema validations
       }
-    ).select('-password'); // Exclude password from response
+    ).select("-password"); // Exclude password from response
 
     if (!updatedUser) {
       return res.status(400).json({ message: "Failed to update profile" });
@@ -78,28 +108,27 @@ exports.updateProfile = async (req, res) => {
 
     res.status(200).json({
       message: "Profile updated successfully",
-      user: updatedUser
+      user: updatedUser,
     });
-
   } catch (error) {
     console.error("Error updating profile:", error);
-    
+
     // Handle validation errors
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
-        message: "Validation error", 
-        errors: Object.values(error.errors).map(err => err.message)
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: Object.values(error.errors).map((err) => err.message),
       });
     }
-    
+
     // Handle cast errors (invalid ObjectId)
-    if (error.name === 'CastError') {
+    if (error.name === "CastError") {
       return res.status(400).json({ message: "Invalid user ID format" });
     }
 
-    res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };

@@ -3,8 +3,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Users, Shield, MessageCircle, Star, ArrowRight, CheckCircle } from "lucide-react"
+import Header from "../components/Header"
+
 
 export default function HomePage() {
+    // const {user,isAuthenticated} = useSelector((state)=>state.auth);
   const [stats] = useState({
     totalUsers: 50000,
     successStories: 2500,
@@ -55,27 +58,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Heart className="h-8 w-8 text-pink-500" />
-            <span className="text-2xl font-bold text-gray-800">BestMate</span>
-          </div>
-          <nav className="hidden md:flex items-center space-x-6 ">
-            <a href="/browse" className="text-gray-600 hover:text-pink-500 transition-colors">Browse Profiles</a>
-            <a href="/about" className="text-gray-600 hover:text-pink-500 transition-colors">About</a>
-            <a href="/contact" className="text-gray-600 hover:text-pink-500 transition-colors">Contact</a>
-          </nav>
-          <div className="flex items-center space-x-3">
-            <a href="/auth">
-              <Button variant="outline">Login</Button>
-            </a>
-            <a href="/auth">
-              <Button className="bg-pink-500 hover:bg-pink-600">Join Now</Button>
-            </a>
-          </div>
-        </div>
-      </header>
+<Header/>
 
       {/* Hero Section (TRUE FULL SCREEN) */}
       <section className="h-screen flex items-center justify-center px-4 text-center relative">

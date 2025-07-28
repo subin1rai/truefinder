@@ -22,9 +22,12 @@ import { Heart, Mail, Lock, User, Phone, Calendar, MapPin } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { axiosInstance } from "../../api/baseUrl";
+import { useDispatch } from "react-redux";
+import { setCredential } from "../../redux/slice/AuthSlice";
 
 
 export default function AuthPage() {
+  const dispatch = useDispatch();
     const router = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({
@@ -49,18 +52,21 @@ export default function AuthPage() {
     setIsLoading(true);
     // Simulate API call
     try {
-      const response = await axiosInstance.post("/signup", {
-        ...signupData,
+      const response = await axiosInstance.post("/auth/login", {
+        ...loginData,
       });
       console.log(response);
-      if (response.status === 201) {
+      if (response.status === 200) {
+
         toast.success(response.data.message);
         const token = response.data.token;
         if (token) {
           localStorage.setItem("token", token); 
         }
-        // Redirect after success (adjust path as needed)
-        router.push("/dashboard");
+        dispatch(
+          setCredential({user:response.data.user})
+        )
+        router("/");
       }
     } catch (error) {
       toast.error(error);
@@ -80,7 +86,7 @@ export default function AuthPage() {
 
     setIsLoading(true);
 
-    // Simulate API call
+    // API call
     try {
       const response = await axiosInstance.post("/auth/signup", {
         ...signupData,

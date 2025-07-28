@@ -4,6 +4,7 @@ import Message from "../models/Message.js";
 export const createMessage = async (req, res) => {
   try {
     const { senderId, receiverId, message } = req.body;
+    console.log(req.body)
     if (!senderId || !receiverId || !message) {
       return res.status(400).json({
         success: false,
@@ -81,7 +82,7 @@ export const getMessages = async (req, res) => {
         return res.status(200).json({
         success: true,
         message:"Conversation created",
-        data:conversation
+        data:newConversation
       })
     }
       return res.status(200).json({
