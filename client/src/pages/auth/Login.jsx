@@ -25,10 +25,9 @@ import { axiosInstance } from "../../api/baseUrl";
 import { useDispatch } from "react-redux";
 import { setCredential } from "../../redux/slice/AuthSlice";
 
-
 export default function AuthPage() {
   const dispatch = useDispatch();
-    const router = useNavigate();
+  const router = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({
     email: "",
@@ -57,15 +56,12 @@ export default function AuthPage() {
       });
       console.log(response);
       if (response.status === 200) {
-
         toast.success(response.data.message);
         const token = response.data.token;
         if (token) {
-          localStorage.setItem("token", token); 
+          localStorage.setItem("token", token);
         }
-        dispatch(
-          setCredential({user:response.data.user})
-        )
+        dispatch(setCredential({ user: response.data.user }));
         router("/");
       }
     } catch (error) {
@@ -85,7 +81,6 @@ export default function AuthPage() {
     }
 
     setIsLoading(true);
-
     // API call
     try {
       const response = await axiosInstance.post("/auth/signup", {
@@ -96,13 +91,18 @@ export default function AuthPage() {
         setIsLoading(false);
         toast.success(response.data.message);
         const token = response.data.token;
+        
         if (token) {
-          localStorage.setItem("token", token); 
-          localStorage.setItem("user",response.data.userId ); 
+          localStorage.setItem("token", token);
+          localStorage.setItem("user", response.data.userId);
+          localStorage.setItem("role", response.data.role);
+          dispatch(setCredential({ user: response.data.user }));
         }
-        // Redirect after success (adjust path as needed)
-        router("/");
-
+        if (response.data.role === "admin") {
+          router("/admin/dashboard");
+        } else {
+          router("/");
+        }
       }
     } catch (error) {
       toast.error(error);

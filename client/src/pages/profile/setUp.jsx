@@ -7,14 +7,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Heart, Upload, User, MapPin, Briefcase, Users, Camera, X } from "lucide-react"
+import { Heart, Upload, User, MapPin, Briefcase, Users, Camera, X, Loader2 } from "lucide-react"
 import { Link, useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../api/baseUrl"
-
+import { useSelector } from "react-redux"
+import { toast } from "react-toastify"
 
 export default function ProfileSetupPage() {
   const router = useNavigate();
+  const { user } = useSelector((state) => state.auth);
+
   const [currentStep, setCurrentStep] = useState(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [profileData, setProfileData] = useState({
     // Basic Info
     firstName: "",
@@ -54,76 +58,170 @@ export default function ProfileSetupPage() {
     // Partner Preferences
     partnerAgeMin: 22,
     partnerAgeMax: 35,
-    partnerHeight: "",
-    partnerEducation: "",
+    partnerHeight: "any",
+    partnerEducation: "any",
     partnerProfession: "",
-    partnerIncome: "",
-    partnerReligion: "",
+    partnerIncome: "any",
+    partnerReligion: "any",
 
-    // Photos
-    photos: [],
+    // Photos - store File objects and existing URLs
+    photos: [], // Will contain mix of File objects (new) and URL strings (existing)
+    existingPhotos: [], // Track existing photo URLs separately
   })
 
   const totalSteps = 6
   const progress = (currentStep / totalSteps) * 100
 
   const availableInterests = [
-    "Reading",
-    "Travel",
-    "Cooking",
-    "Music",
-    "Movies",
-    "Sports",
-    "Photography",
-    "Dancing",
-    "Yoga",
-    "Fitness",
-    "Art",
-    "Technology",
-    "Fashion",
-    "Food",
-    "Nature",
-    "Adventure",
-    "Volunteering",
-    "Gaming",
-    "Writing",
-    "Meditation",
+    "Reading", "Travel", "Cooking", "Music", "Movies", "Sports",
+    "Photography", "Dancing", "Yoga", "Fitness", "Art", "Technology",
+    "Fashion", "Food", "Nature", "Adventure", "Volunteering",
+    "Gaming", "Writing", "Meditation",
   ]
-useEffect(() => {
-  const id = localStorage.getItem("user");
 
-  const findUser = async () => {
-    try {
-      const { data } = await axiosInstance.get(`/user/${id}`);
-
-      // Fill only the matching fields
-      setProfileData((prev) => ({
-        ...prev,
-        firstName: data.firstName || "",
-        lastName: data.lastName || "",
-        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.slice(0, 10) : "", // Format as YYYY-MM-DD
-        gender: data.gender || "",
-        city: data.city || "",
-        // If you had height, weight, etc., include those too if present
-        interests: data.interests || [],
-      }));
-    } catch (err) {
-      console.error(err);
+  useEffect(() => {
+    // Add null/undefined check for user
+    if (!user || !user._id) {
+      console.warn("User not found, redirecting to login...");
+      router("/auth");
+      return;
     }
+
+    const id = user._id;
+    console.log("id", id)
+    
+    const findUser = async () => {
+      try {
+        const { data } = await axiosInstance.get(`/user/${id}`);
+        console.log("clef", data)
+        
+        // Fill only the matching fields with null/undefined checks
+        setProfileData((prev) => ({
+          ...prev,
+          firstName: data?.firstName || "",
+          lastName: data?.lastName || "",
+          dateOfBirth: data?.dateOfBirth ? data.dateOfBirth.slice(0, 10) : "",
+          gender: data?.gender || "",
+          height: data?.height || "",
+          weight: data?.weight || "",
+          country: data?.country || "",
+          state: data?.state || "",
+          city: data?.city || "",
+          education: data?.education || "",
+          profession: data?.profession || "",
+          company: data?.company || "",
+          income: data?.income || "",
+          religion: data?.religion || "",
+          caste: data?.caste || "",
+          motherTongue: data?.motherTongue || "",
+          familyType: data?.familyType || "",
+          familyStatus: data?.familyStatus || "",
+          diet: data?.diet || "",
+          smoking: data?.smoking || "",
+          drinking: data?.drinking || "",
+          bio: data?.bio || "",
+          interests: Array.isArray(data?.interests) ? data.interests : [],
+          partnerAgeMin: data?.partnerPreferences?.ageMin || 22,
+          partnerAgeMax: data?.partnerPreferences?.ageMax || 35,
+          partnerHeight: data?.partnerPreferences?.height || "any",
+          partnerEducation: data?.partnerPreferences?.education || "any",
+          partnerProfession: data?.partnerPreferences?.profession || "",
+          partnerIncome: data?.partnerPreferences?.income || "any",
+          partnerReligion: data?.partnerPreferences?.religion || "any",
+          // Handle existing photos with null check
+          existingPhotos: Array.isArray(data?.photos) ? data.photos : [],
+          photos: [], // Reset photos array for new uploads
+        }));
+      } catch (err) {
+        console.error("Error fetching user data:", err);
+        // Don't redirect here, let user continue with empty form
+      }
+    };
+
+    findUser();
+  }, [user, router]);
+
+  // Handle file selection (not upload yet)
+  const handlePhotoSelect = (file, index) => {
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, JPG, WebP)');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error('File size should be less than 5MB');
+      return;
+    }
+
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+
+    // Update photos array
+    const newPhotos = [...profileData.photos];
+    
+    // If there's an existing photo at this index, replace it
+    if (newPhotos[index]) {
+      // Revoke old preview URL if it exists
+      if (newPhotos[index].preview) {
+        URL.revokeObjectURL(newPhotos[index].preview);
+      }
+    }
+
+    newPhotos[index] = {
+      file: file,
+      preview: previewUrl,
+      isNew: true
+    };
+    
+    setProfileData(prev => ({
+      ...prev,
+      photos: newPhotos
+    }));
   };
 
-  if (id) {
-    findUser();
-  }
-}, []);
+  // Handle photo removal
+  const handlePhotoRemove = (index) => {
+    const newPhotos = [...profileData.photos];
+    
+    // Revoke preview URL if it exists
+    if (newPhotos[index] && newPhotos[index].preview) {
+      URL.revokeObjectURL(newPhotos[index].preview);
+    }
+    
+    // Remove from array
+    newPhotos.splice(index, 1);
+    
+    setProfileData(prev => ({
+      ...prev,
+      photos: newPhotos
+    }));
+  };
 
+  // Handle existing photo removal
+  const handleExistingPhotoRemove = (index) => {
+    const newExistingPhotos = [...profileData.existingPhotos];
+    newExistingPhotos.splice(index, 1);
+    
+    setProfileData(prev => ({
+      ...prev,
+      existingPhotos: newExistingPhotos
+    }));
+  };
 
   const handleInterestToggle = (interest) => {
     setProfileData((prev) => ({
       ...prev,
       interests: prev.interests.includes(interest)
         ? prev.interests.filter((i) => i !== interest)
-        : [...prev.interests, interest],
+        : prev.interests.length < 10 
+          ? [...prev.interests, interest]
+          : prev.interests // Don't add if already at limit
     }))
   }
 
@@ -139,101 +237,150 @@ useEffect(() => {
     }
   }
 
-const handleSubmit = async () => {
-  try {
-    const userId = localStorage.getItem("user");
-    
-    if (!userId) {
-      console.error("No user ID found");
-      return;
-    }
-
-    // Create form data for profile update
-    const profileUpdateData = {
-      // Basic Info
-      firstName: profileData.firstName,
-      lastName: profileData.lastName,
-      dateOfBirth: profileData.dateOfBirth,
-      gender: profileData.gender,
-      height: profileData.height,
-      weight: profileData.weight,
-
-      // Location
-      country: profileData.country,
-      state: profileData.state,
-      city: profileData.city,
-
-      // Education & Career
-      education: profileData.education,
-      profession: profileData.profession,
-      company: profileData.company,
-      income: profileData.income,
-
-      // Family & Religion
-      religion: profileData.religion,
-      caste: profileData.caste,
-      motherTongue: profileData.motherTongue,
-      familyType: profileData.familyType,
-      familyStatus: profileData.familyStatus,
-
-      // Lifestyle
-      diet: profileData.diet,
-      smoking: profileData.smoking,
-      drinking: profileData.drinking,
-
-      // About
-      bio: profileData.bio,
-      interests: profileData.interests,
-
-      // Partner Preferences
-      partnerPreferences: {
-        ageMin: profileData.partnerAgeMin,
-        ageMax: profileData.partnerAgeMax,
-        height: profileData.partnerHeight,
-        education: profileData.partnerEducation,
-        profession: profileData.partnerProfession,
-        income: profileData.partnerIncome,
-        religion: profileData.partnerReligion,
-      },
-
-      // Photos (array of photo URLs - you'll need to handle file upload separately)
-      photos: profileData.photos,
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true);
       
+      // Add null check for user
+      if (!user || !user._id) {
+        toast.error("User not found. Please login again.");
+        router("/auth");
+        return;
+      }
+
+      const userId = user._id;
+
+      // Create FormData for multipart/form-data request
+      const formData = new FormData();
+
+      // Add basic profile data with fallback values
+      formData.append('firstName', profileData.firstName || '');
+      formData.append('lastName', profileData.lastName || '');
+      formData.append('dateOfBirth', profileData.dateOfBirth || '');
+      formData.append('gender', profileData.gender || '');
+      formData.append('height', profileData.height || '');
+      formData.append('weight', profileData.weight || '');
+      formData.append('country', profileData.country || '');
+      formData.append('state', profileData.state || '');
+      formData.append('city', profileData.city || '');
+      formData.append('education', profileData.education || '');
+      formData.append('profession', profileData.profession || '');
+      formData.append('company', profileData.company || '');
+      formData.append('income', profileData.income || '');
+      formData.append('religion', profileData.religion || '');
+      formData.append('caste', profileData.caste || '');
+      formData.append('motherTongue', profileData.motherTongue || '');
+      formData.append('familyType', profileData.familyType || '');
+      formData.append('familyStatus', profileData.familyStatus || '');
+      formData.append('diet', profileData.diet || '');
+      formData.append('smoking', profileData.smoking || '');
+      formData.append('drinking', profileData.drinking || '');
+      formData.append('bio', profileData.bio || '');
+
+      // Add interests as JSON string
+      formData.append('interests', JSON.stringify(profileData.interests || []));
+
+      // Add partner preferences as JSON string
+      const partnerPreferences = {
+        ageMin: profileData.partnerAgeMin || 22,
+        ageMax: profileData.partnerAgeMax || 35,
+        height: profileData.partnerHeight || "any",
+        education: profileData.partnerEducation || "any",
+        profession: profileData.partnerProfession || "",
+        income: profileData.partnerIncome || "any",
+        religion: profileData.partnerReligion || "any",
+      };
+      formData.append('partnerPreferences', JSON.stringify(partnerPreferences));
+
+      // Add existing photos as JSON string
+      formData.append('existingPhotos', JSON.stringify(profileData.existingPhotos || []));
+
+      // Add new photo files
+      if (Array.isArray(profileData.photos)) {
+        profileData.photos.forEach((photo, index) => {
+          if (photo && photo.file) {
+            formData.append('photos', photo.file);
+          }
+        });
+      }
+
       // Mark profile as completed
-      profileCompleted: true
-    };
+      formData.append('profileCompleted', 'true');
 
-    console.log("Updating profile with data:", profileUpdateData);
+      console.log("Updating profile with FormData");
 
-    // Make API call to update profile
-    const response = await axiosInstance.put(`/user/profile/${userId}`, profileUpdateData);
+      // Make API call to update profile
+      const response = await axiosInstance.put(`/user/profile/${userId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-    if (response.data) {
-      console.log("Profile updated successfully:", response.data);
+      if (response.data) {
+        console.log("Profile updated successfully:", response.data);
+        toast.success("Profile Updated Successfully!");
+        
+        // Clean up preview URLs
+        if (Array.isArray(profileData.photos)) {
+          profileData.photos.forEach(photo => {
+            if (photo && photo.preview) {
+              URL.revokeObjectURL(photo.preview);
+            }
+          });
+        }
+        
+        router("/dashboard");
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
       
-      // Show success message (you can use toast notification library)
-      alert("Profile updated successfully!");
-      
-      // Navigate to dashboard
-      router("/dashboard");
+      if (error.response) {
+        const errorMessage = error.response.data?.message || "Failed to update profile";
+        toast.error(`Error: ${errorMessage}`);
+      } else if (error.request) {
+        toast.error("Network error. Please check your connection and try again.");
+      } else {
+        toast.error("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  } catch (error) {
-    console.error("Error updating profile:", error);
+  };
+
+  // Get total photo count (existing + new)
+  const getTotalPhotoCount = () => {
+    const existingCount = Array.isArray(profileData.existingPhotos) ? profileData.existingPhotos.length : 0;
+    const newCount = Array.isArray(profileData.photos) ? profileData.photos.filter(p => p && p.file).length : 0;
+    return existingCount + newCount;
+  };
+
+  // Get photo for display at specific index
+  const getPhotoAtIndex = (index) => {
+    const existingPhotos = Array.isArray(profileData.existingPhotos) ? profileData.existingPhotos : [];
+    const totalExisting = existingPhotos.length;
     
-    // Handle different error scenarios
-    if (error.response) {
-      // API returned an error response
-      const errorMessage = error.response.data?.message || "Failed to update profile";
-      alert(`Error: ${errorMessage}`);
-    } else if (error.request) {
-      // Network error
-      alert("Network error. Please check your connection and try again.");
+    if (index < totalExisting) {
+      // Show existing photo
+      return {
+        url: existingPhotos[index],
+        isExisting: true,
+        existingIndex: index
+      };
     } else {
-      // Other error
-      alert("An unexpected error occurred. Please try again.");
+      // Show new photo
+      const newPhotoIndex = index - totalExisting;
+      const photos = Array.isArray(profileData.photos) ? profileData.photos : [];
+      const newPhoto = photos[newPhotoIndex];
+      if (newPhoto && newPhoto.file) {
+        return {
+          url: newPhoto.preview,
+          isExisting: false,
+          newIndex: newPhotoIndex
+        };
+      }
     }
-  }
-};
+    return null;
+  };
 
   const renderStep = () => {
     switch (currentStep) {
@@ -320,6 +467,16 @@ const handleSubmit = async () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="weight">Weight (kg)</Label>
+                <Input
+                  id="weight"
+                  type="number"
+                  placeholder="Enter weight in kg"
+                  value={profileData.weight}
+                  onChange={(e) => setProfileData({ ...profileData, weight: e.target.value })}
+                />
+              </div>
             </div>
           </div>
         )
@@ -345,7 +502,7 @@ const handleSubmit = async () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="india">India</SelectItem>
-                    <SelectItem value="usa">United States</SelectItem>
+                    <SelectItem value="usa">Nepal</SelectItem>
                     <SelectItem value="canada">Canada</SelectItem>
                     <SelectItem value="uk">United Kingdom</SelectItem>
                     <SelectItem value="australia">Australia</SelectItem>
@@ -508,6 +665,22 @@ const handleSubmit = async () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="familyStatus">Family Status</Label>
+                <Select
+                  value={profileData.familyStatus}
+                  onValueChange={(value) => setProfileData({ ...profileData, familyStatus: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select family status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="middle-class">Middle Class</SelectItem>
+                    <SelectItem value="upper-middle-class">Upper Middle Class</SelectItem>
+                    <SelectItem value="rich">Rich</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         )
@@ -624,40 +797,62 @@ const handleSubmit = async () => {
                 <Label>Profile Photos</Label>
                 <p className="text-sm text-gray-600 mb-3">Upload at least 3 photos (max 6)</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {[...Array(6)].map((_, index) => (
-                    <div
-                      key={index}
-                      className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-pink-500 transition-colors"
-                    >
-                      {profileData.photos[index] ? (
-                        <div className="relative w-full h-full">
-                          <img
-                            src={profileData.photos[index] || "/placeholder.svg"}
-                            alt={`Photo ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg"
-                          />
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="absolute top-2 right-2 h-6 w-6 p-0"
-                            onClick={() => {
-                              const newPhotos = [...profileData.photos]
-                              newPhotos.splice(index, 1)
-                              setProfileData({ ...profileData, photos: newPhotos })
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Upload Photo</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {[...Array(6)].map((_, index) => {
+                    const photo = getPhotoAtIndex(index);
+                    
+                    return (
+                      <div
+                        key={index}
+                        className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-pink-500 transition-colors relative"
+                      >
+                        {photo ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={photo.url}
+                              alt={`Photo ${index + 1}`}
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="absolute top-2 right-2 h-6 w-6 p-0"
+                              onClick={() => {
+                                if (photo.isExisting) {
+                                  handleExistingPhotoRemove(photo.existingIndex);
+                                } else {
+                                  handlePhotoRemove(photo.newIndex);
+                                }
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const newPhotoIndex = profileData.photos.length;
+                                  handlePhotoSelect(file, newPhotoIndex);
+                                }
+                              }}
+                            />
+                            <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                            <p className="text-sm text-gray-500">Upload Photo</p>
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Uploaded: {getTotalPhotoCount()}/6 • 
+                  Supported formats: JPEG, PNG, JPG, WebP • Max size: 5MB
+                </p>
               </div>
 
               {/* Partner Preferences */}
@@ -673,7 +868,7 @@ const handleSubmit = async () => {
                       max="60"
                       value={profileData.partnerAgeMin}
                       onChange={(e) =>
-                        setProfileData({ ...profileData, partnerAgeMin: Number.parseInt(e.target.value) })
+                        setProfileData({ ...profileData, partnerAgeMin: Number.parseInt(e.target.value) || 22 })
                       }
                     />
                   </div>
@@ -686,9 +881,28 @@ const handleSubmit = async () => {
                       max="60"
                       value={profileData.partnerAgeMax}
                       onChange={(e) =>
-                        setProfileData({ ...profileData, partnerAgeMax: Number.parseInt(e.target.value) })
+                        setProfileData({ ...profileData, partnerAgeMax: Number.parseInt(e.target.value) || 35 })
                       }
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="partnerHeight">Preferred Height</Label>
+                    <Select
+                      value={profileData.partnerHeight}
+                      onValueChange={(value) => setProfileData({ ...profileData, partnerHeight: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any height" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value={"5'0\""}>{"5'0\" and above"}</SelectItem>
+                        <SelectItem value={"5'3\""}>{"5'3\" and above"}</SelectItem>
+                        <SelectItem value={"5'6\""}>{"5'6\" and above"}</SelectItem>
+                        <SelectItem value={"5'9\""}>{"5'9\" and above"}</SelectItem>
+                        <SelectItem value={"6'0\""}>{"6'0\" and above"}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="partnerEducation">Preferred Education</Label>
@@ -704,6 +918,35 @@ const handleSubmit = async () => {
                         <SelectItem value="bachelors">Bachelor's or higher</SelectItem>
                         <SelectItem value="masters">Master's or higher</SelectItem>
                         <SelectItem value="professional">Professional degree</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="partnerProfession">Preferred Profession</Label>
+                    <Input
+                      id="partnerProfession"
+                      placeholder="Any profession"
+                      value={profileData.partnerProfession}
+                      onChange={(e) => setProfileData({ ...profileData, partnerProfession: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="partnerIncome">Preferred Income</Label>
+                    <Select
+                      value={profileData.partnerIncome}
+                      onValueChange={(value) => setProfileData({ ...profileData, partnerIncome: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any income" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value="3-5">3-5 LPA or higher</SelectItem>
+                        <SelectItem value="5-8">5-8 LPA or higher</SelectItem>
+                        <SelectItem value="8-12">8-12 LPA or higher</SelectItem>
+                        <SelectItem value="12-18">12-18 LPA or higher</SelectItem>
+                        <SelectItem value="18-25">18-25 LPA or higher</SelectItem>
+                        <SelectItem value="25+">25+ LPA</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -724,6 +967,7 @@ const handleSubmit = async () => {
                         <SelectItem value="christian">Christian</SelectItem>
                         <SelectItem value="sikh">Sikh</SelectItem>
                         <SelectItem value="jain">Jain</SelectItem>
+                        <SelectItem value="buddhist">Buddhist</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -738,12 +982,38 @@ const handleSubmit = async () => {
     }
   }
 
+  // Cleanup effect for preview URLs
+  useEffect(() => {
+    return () => {
+      // Clean up preview URLs when component unmounts
+      if (Array.isArray(profileData.photos)) {
+        profileData.photos.forEach(photo => {
+          if (photo && photo.preview) {
+            URL.revokeObjectURL(photo.preview);
+          }
+        });
+      }
+    };
+  }, [profileData.photos]);
+
+  // Don't render if user is not available
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-pink-500" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
       {/* Header */}
       <header className="bg-white border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link to="/" className="flex items-center space-x-2">
             <Heart className="h-8 w-8 text-pink-500" />
             <span className="text-2xl font-bold text-gray-800">BestMate</span>
           </Link>
@@ -771,16 +1041,35 @@ const handleSubmit = async () => {
 
           {/* Navigation Buttons */}
           <div className="flex justify-between mt-8">
-            <Button variant="outline" onClick={handlePrevious} disabled={currentStep === 1}>
+            <Button 
+              variant="outline" 
+              onClick={handlePrevious} 
+              disabled={currentStep === 1 || isSubmitting}
+            >
               Previous
             </Button>
 
             {currentStep === totalSteps ? (
-              <Button onClick={handleSubmit} className="bg-pink-500 hover:bg-pink-600">
-                Complete Profile
+              <Button 
+                onClick={handleSubmit} 
+                className="bg-pink-500 hover:bg-pink-600"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving Profile...
+                  </>
+                ) : (
+                  'Complete Profile'
+                )}
               </Button>
             ) : (
-              <Button onClick={handleNext} className="bg-pink-500 hover:bg-pink-600">
+              <Button 
+                onClick={handleNext} 
+                className="bg-pink-500 hover:bg-pink-600"
+                disabled={isSubmitting}
+              >
                 Next
               </Button>
             )}
@@ -788,8 +1077,12 @@ const handleSubmit = async () => {
 
           {/* Skip Option */}
           <div className="text-center mt-4">
-            <Button variant="ghost" onClick={() => router.push("/dashboard")}>
-              Skip for now
+            <Button 
+              variant="ghost" 
+              onClick={() => router("/dashboard")}
+              disabled={isSubmitting}
+            >
+              Skip for now  
             </Button>
           </div>
         </div>

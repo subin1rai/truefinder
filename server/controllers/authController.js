@@ -16,16 +16,15 @@ exports.signup = async (req, res) => {
       city,
       agreeToTerms,
     } = req.body;
-    // Validate passwords match
+
+    // Password match validation
     if (password !== confirmPassword)
       return res.status(400).json({ message: "Passwords do not match" });
 
     if (!agreeToTerms)
-      return res
-        .status(400)
-        .json({ message: "Please agree to terms and conditions" });
+      return res.status(400).json({ message: "Please agree to terms and conditions" });
 
-    // Check if user exists
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "User already exists" });
@@ -33,7 +32,11 @@ exports.signup = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Check how many users exist
+    const users = await User.find();
+    let role = users.length === 0 ? "admin" : "user";
+
+    // Create user with appropriate role
     const user = new User({
       firstName,
       lastName,
@@ -44,28 +47,30 @@ exports.signup = async (req, res) => {
       gender,
       city,
       agreeToTerms,
+      role,
     });
 
     await user.save();
+
+    // Generate JWT
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1d",
     });
 
-    res
-      .status(201)
-      .json({
-        message: "User registered successfully",
-        token,
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-      });
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      role: user.role,
+      userId: user._id,
+      name: user.firstName + " " + user.lastName,
+      email: user.email,
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Signup failed", error: error.message });
   }
 };
-
 
 
 exports.login = async (req, res) => {

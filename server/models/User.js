@@ -9,46 +9,50 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     password: { type: String, required: true },
     dateOfBirth: { type: Date, required: true },
+    role: { type: String, default: "user" },
     gender: { type: String, required: true },
     city: { type: String, required: true },
     agreeToTerms: { type: Boolean, required: true },
     isVerified: { type: Boolean, default: false },
+    like: { type: Number },
+
     avatar: {
-      type:String,
-      default:"https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net/557058:fe1e10e7-d931-49b4-816a-cc8517da2177/" 
+      type: String,
+      default:
+        "https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net/557058:fe1e10e7-d931-49b4-816a-cc8517da2177/",
     },
     preferences: [{ type: String }], // Keep this for backward compatibility
-    
+
     // New profile fields
     height: { type: String },
     weight: { type: String },
-    
+
     // Location
     country: { type: String },
     state: { type: String },
-    
+
     // Education & Career
     education: { type: String },
     profession: { type: String },
     company: { type: String },
     income: { type: String },
-    
+
     // Family & Religion
     religion: { type: String },
     caste: { type: String },
     motherTongue: { type: String },
     familyType: { type: String },
     familyStatus: { type: String },
-    
+
     // Lifestyle
     diet: { type: String },
     smoking: { type: String },
     drinking: { type: String },
-    
+
     // About
     bio: { type: String },
     interests: [{ type: String }],
-    
+
     // Partner Preferences
     partnerPreferences: {
       ageMin: { type: Number, default: 22 },
@@ -59,15 +63,15 @@ const userSchema = new mongoose.Schema(
       income: { type: String },
       religion: { type: String },
     },
-    
+
     // Photos
     photos: [{ type: String }], // Array of photo URLs
-    
+
     // Profile completion status
     profileCompleted: { type: Boolean, default: false },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model("User", userSchema);
-

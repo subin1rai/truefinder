@@ -6,9 +6,11 @@ const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.route");
 const chatRoutes = require("./routes/chat.route");
 const messageRoutes = require("./routes/message.route");
+const adminRoutes = require("./routes/admin.route");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const user = require("./models/user");
+const path = require('path');
 
 dotenv.config();
 const app = express();
@@ -22,10 +24,25 @@ app.use(
 );
 app.use(express.json());
 
+// Add CORS headers for images
+app.use('/images', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
+// Serve static files
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+
+// OR if your images are stored differently:
+app.use(express.static('public')); // This serves everything in public folder
+
 app.use("/api/auth", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api/chat", chatRoutes)
 app.use("/api/message", messageRoutes);
+app.use("/api/admin", adminRoutes)
+
 
 app.get("/", (req, res) => {
   res.send("API is running...");
@@ -35,7 +52,7 @@ app.get("/", (req, res) => {
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // Be more specific with CORS
+    origin: "http://localhost:5173", 
     methods: ["GET", "POST"],
     credentials: true
   },

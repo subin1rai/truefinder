@@ -50,26 +50,26 @@ export default function MainChat() {
   // Initialize socket connection
   useEffect(() => {
     let newSocket;
-    
+
     if (user && user._id) {
       newSocket = io(BaseUrl, {
-        transports: ['websocket'],
-        upgrade: true
+        transports: ["websocket"],
+        upgrade: true,
       });
-      
+
       setSocket(newSocket);
 
-      newSocket.on('connect', () => {
-        console.log('Connected to server:', newSocket.id);
+      newSocket.on("connect", () => {
+        console.log("Connected to server:", newSocket.id);
         newSocket.emit("AddUserSocket", user._id);
       });
 
-      newSocket.on('disconnect', () => {
-        console.log('Disconnected from server');
+      newSocket.on("disconnect", () => {
+        console.log("Disconnected from server");
       });
 
-      newSocket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+      newSocket.on("connect_error", (error) => {
+        console.error("Socket connection error:", error);
       });
     }
 
@@ -100,24 +100,31 @@ export default function MainChat() {
     if (socket) {
       const handleReceiveMessage = (newMessage) => {
         console.log("Received socket message:", newMessage);
-        
+
         // Check if the message is for the currently selected chat
-        if (newMessage.userId === selectedUser?.chatId || newMessage.receiverId === user?._id) {
+        if (
+          newMessage.userId === selectedUser?.chatId ||
+          newMessage.receiverId === user?._id
+        ) {
           setMessages((prevMessages) => {
             // Avoid duplicate messages
-            const messageExists = prevMessages.some(msg => 
-              msg.userId === newMessage.userId && 
-              msg.message === newMessage.message && 
-              Math.abs((msg.time || msg.createdAt) - newMessage.time) < 1000
+            const messageExists = prevMessages.some(
+              (msg) =>
+                msg.userId === newMessage.userId &&
+                msg.message === newMessage.message &&
+                Math.abs((msg.time || msg.createdAt) - newMessage.time) < 1000
             );
-            
+
             if (!messageExists) {
-              return [...prevMessages, {
-                userId: newMessage.userId,
-                message: newMessage.message,
-                time: newMessage.time,
-                createdAt: new Date(newMessage.time).toISOString()
-              }];
+              return [
+                ...prevMessages,
+                {
+                  userId: newMessage.userId,
+                  message: newMessage.message,
+                  time: newMessage.time,
+                  createdAt: new Date(newMessage.time).toISOString(),
+                },
+              ];
             }
             return prevMessages;
           });
@@ -145,8 +152,21 @@ export default function MainChat() {
     }
   }, [socket, selectedUser, user]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !user || !user._id) {
+      navigate("/auth");
+    } else {
+      getUser();
+    }
+  }, [isAuthenticated, user]);
+
   const getUser = async () => {
+    if (!user || !user._id) {
+      console.log("User not available yet.");
+      return;
+    }
     try {
+      console.log("dfsdf", user._id);
       const response = await axiosInstance.post("/getUser", {
         currentUserId: user._id,
       });
@@ -206,7 +226,7 @@ export default function MainChat() {
       message: messageText,
       time: Date.now(),
       createdAt: new Date().toISOString(),
-      _id: `temp-${Date.now()}` // temporary ID
+      _id: `temp-${Date.now()}`, // temporary ID
     };
 
     // Add message optimistically
@@ -246,7 +266,7 @@ export default function MainChat() {
             ? {
                 ...msg,
                 _id: data._id || msg._id,
-                createdAt: data.createdAt || msg.createdAt
+                createdAt: data.createdAt || msg.createdAt,
               }
             : msg
         )
@@ -254,12 +274,12 @@ export default function MainChat() {
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.message || error.message);
-      
+
       // Remove optimistic message on error
       setMessages((prevMessages) =>
         prevMessages.filter((msg) => msg._id !== optimisticMessage._id)
       );
-      
+
       setNewMessage(messageText); // Restore message on error
     }
   };
@@ -283,7 +303,7 @@ export default function MainChat() {
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Fixed Header */}
       <div className="flex-shrink-0">
-        <Header/>
+        <Header />
       </div>
 
       {/* Main Content Area */}
@@ -479,7 +499,9 @@ export default function MainChat() {
                                       : "text-gray-500 text-start"
                                   }`}
                                 >
-                                  {formatMessageTime(message.createdAt || message.time)}
+                                  {formatMessageTime(
+                                    message.createdAt || message.time
+                                  )}
                                 </p>
                               </div>
                             </div>
